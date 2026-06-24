@@ -2,14 +2,32 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { supabase } from "@/lib/supabase";
 
 const DRAFTS = ["Q3 client case study", "Delegation framework carousel", "Friday founder reflections"];
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
   const isStudio = pathname === "/studio";
   const isSchedule = pathname === "/schedule";
+  const [email, setEmail] = useState("");
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      setEmail(data.user?.email ?? "");
+    });
+  }, []);
+
+  async function handleSignOut() {
+    await supabase.auth.signOut();
+    router.push("/login");
+    router.refresh();
+  }
+
+  const initial = email ? email[0].toUpperCase() : "?";
 
   return (
     <aside style={{
@@ -49,11 +67,16 @@ export default function Sidebar() {
 
       {/* User chip */}
       <div style={{ marginTop: "auto", padding: "10px 8px", display: "flex", alignItems: "center", gap: 10, borderTop: "1px solid #ececea" }}>
-        <div style={{ width: 28, height: 28, borderRadius: "50%", background: "#d6d6d2", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 600, color: "#52524d", flexShrink: 0 }}>A</div>
-        <div style={{ lineHeight: 1.2 }}>
-          <div style={{ fontSize: 12.5, fontWeight: 500 }}>Anthony</div>
+        <div style={{ width: 28, height: 28, borderRadius: "50%", background: "#d6d6d2", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 600, color: "#52524d", flexShrink: 0 }}>{initial}</div>
+        <div style={{ lineHeight: 1.2, flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 12.5, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{email || "Loading…"}</div>
           <div style={{ fontSize: 11, color: "#8a8a85" }}>Personal plan</div>
         </div>
+        <button onClick={handleSignOut} title="Sign out" style={{ background: "none", border: "none", cursor: "pointer", color: "#8a8a85", padding: 4, borderRadius: 4, display: "flex", alignItems: "center" }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+          </svg>
+        </button>
       </div>
     </aside>
   );
