@@ -2,9 +2,11 @@ import { create } from "zustand";
 import type { Post, PlatformKey, AspectRatio } from "./types";
 import { SEED_POSTS } from "./data";
 import type { ContentTypeId } from "./data";
+import { supabase } from "./supabase";
 
 interface AppStore {
   posts: Post[];
+  postsLoaded: boolean;
 
   // Draft (studio)
   draftPlatforms: Record<PlatformKey, boolean>;
@@ -26,6 +28,7 @@ interface AppStore {
   googleCalendarSync: boolean;
 
   // Actions
+  loadPosts: () => Promise<void>;
   toggleAI: () => void;
   setAIPrompt: (p: string) => void;
   generateIdeas: () => void;
@@ -46,8 +49,9 @@ interface AppStore {
   deletePost: (id: string) => void;
 }
 
-export const useStore = create<AppStore>((set) => ({
-  posts: SEED_POSTS,
+export const useStore = create<AppStore>((set, get) => ({
+  posts: [],
+  postsLoaded: false,
 
   draftPlatforms: { fb: true, ig: true, tt: false },
   draftContentTypes: { fb: "video", ig: "reel", tt: "video" },
@@ -65,6 +69,22 @@ export const useStore = create<AppStore>((set) => ({
   accountMenuOpen: false,
   selectedPostId: "p-jun24-09",
   googleCalendarSync: false,
+
+  loadPosts: async () => {
+    const { data, error } = await supabase.from("posts").select("*").order("day").order("time");
+    if (error) {
+      // Fall back to seed data if Supabase fails
+      set({ posts: SEED_POSTS, postsLoaded: true });
+      return;
+    }
+    if (!data || data.length === 0) {
+      // First run — seed the database
+      await supabase.from("posts").insert(SEED_POSTS);
+      set({ posts: SEED_POSTS, postsLoaded: true });
+      return;
+    }
+    set({ posts: data as Post[], postsLoaded: true });
+  },
 
   toggleAI: () => set((s) => ({ aiOpen: !s.aiOpen })),
   setAIPrompt: (p) => set({ aiPrompt: p }),
@@ -85,18 +105,27 @@ export const useStore = create<AppStore>((set) => ({
     set((s) => ({ draftCustomizePerPlatform: !s.draftCustomizePerPlatform })),
   setSelectedPost: (id) => set({ selectedPostId: id }),
   toggleGoogleSync: () => set((s) => ({ googleCalendarSync: !s.googleCalendarSync })),
-  markAsPosted: (id) =>
+
+  markAsPosted: (id) => {
     set((s) => ({
       posts: s.posts.map((p) => (p.id === id ? { ...p, status: "posted" } : p)),
       selectedPostId: null,
-    })),
-  pausePost: (id) =>
+    }));
+    supabase.from("posts").update({ status: "posted" }).eq("id", id).then(() => {});
+  },
+
+  pausePost: (id) => {
     set((s) => ({
       posts: s.posts.map((p) => (p.id === id ? { ...p, status: "draft" } : p)),
-    })),
-  deletePost: (id) =>
+    }));
+    supabase.from("posts").update({ status: "draft" }).eq("id", id).then(() => {});
+  },
+
+  deletePost: (id) => {
     set((s) => ({
       posts: s.posts.filter((p) => p.id !== id),
       selectedPostId: null,
-    })),
+    }));
+    supabase.from("posts").delete().eq("id", id).then(() => {});
+  },
 }));
